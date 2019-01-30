@@ -1,0 +1,5 @@
+.mypy_cache
+.project
+.pydevproject
+.vscode
+__pycache__
