@@ -38,7 +38,7 @@ Z80.outb(254, 0xff)  # white border on startup
 
 sys.setcheckinterval(255)  # we don't use threads, kind of speed up
 
-load.load_z80('./games/Batty.z80')
-#load.load_sna('./games/Exolon.sna')
+#load.load_z80('./games/Batty.z80')
+load.load_sna('./games/Exolon.sna')
 
 run()

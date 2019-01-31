@@ -1591,7 +1591,7 @@ def retpe():
 
 def retp():
     global _fS
-    if not _fZ:
+    if not _fS:
         poppc()
         return 11
     else:
