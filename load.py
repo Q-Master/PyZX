@@ -148,32 +148,6 @@ def load_z80_extended(mz80file):
         load_z80_block(mz80file[offset : offset+length], addr, compressed)
         offset += length
 
-"""
-def load_z80_block(data, addr, compressed):
-    if compressed:
-        for i in range(len(data)):
-            tbyte = data[i]
-            i += 1
-            if tbyte != 0xed:
-                Z80.mem[addr] = tbyte
-                addr += 1
-            else:
-                tbyte = data[i]
-                if tbyte != 0xed:
-                    Z80.mem[addr] = 0xed
-                    addr += 1
-                else:
-                    i += 1
-                    count = data[i]
-                    i += 1
-                    tbyte = data[i]
-                    print(f'addr: {addr}, count: {count}')
-                    for _ in range(count):
-                        Z80.mem[addr] = tbyte
-                        addr += 1
-    else:
-        Z80.mem[addr : addr+len(data)] = data[:]
-"""
 
 def load_z80_block(data, addr, compressed):
     if compressed:
@@ -185,7 +159,7 @@ def load_z80_block(data, addr, compressed):
             i += 1
             k += 1
             if tbyte != 0xed:
-                Z80.mem[addr] = tbyte
+                Z80.memory.pokeb(addr, tbyte)
                 addr += 1
             else:
                 tbyte = data[i]
@@ -193,8 +167,7 @@ def load_z80_block(data, addr, compressed):
                 k += 1
                 if tbyte != 0xed:
                     # TODO: check
-                    Z80.mem[addr] = 0
-                    Z80.mem[addr] = 0xed
+                    Z80.memory.pokeb(addr, 0xed)
                     addr += 1
                     i -= 1
                     k -= 1
@@ -207,10 +180,10 @@ def load_z80_block(data, addr, compressed):
                     k += 1
                     while count > 0:
                         count -= 1
-                        Z80.mem[addr] = tbyte
+                        Z80.memory.pokeb(addr, tbyte)
                         addr += 1
     else:
-        Z80.mem[addr : addr+len(data)] = data[:]
+        Z80.memory.mem[addr : addr+len(data)] = data[:]
 
 
 _sna_struct = struct.Struct('<BHHHHHHHHHBBHHBB')
@@ -251,5 +224,5 @@ def load_sna(name):
         Z80._IM = Z80.IM2
     Z80.setflags()
     Z80.outb(254, (border % 8))  # border
-    Z80.mem[16384:] = msnafile[27:]
+    Z80.memory.mem[16384:] = msnafile[27:]
     Z80.poppc()

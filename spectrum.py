@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 # ZX Spectrum Emulator
 # Vadim Kataev
 # www.technopedia.org
@@ -6,6 +7,7 @@
 # ver.0.1 2005
 # ver.0.2 June 2008
 # Python 3 conversion + modifications by CityAceE 2018
+# Full z80 core rewrite + optimizations + improvements Q-Master 2019
 
 import sys
 
@@ -18,7 +20,7 @@ romfile = '48.rom'
 
 def load_rom(romfilename):
     with open(romfilename, 'rb') as rom:
-        rom.readinto(Z80.mem)
+        rom.readinto(Z80.memory.mem)
     print('Loaded ROM: %s' % romfilename)
 
 
@@ -36,7 +38,7 @@ load_rom(romfile)
 Z80.reset()
 Z80.outb(254, 0xff)  # white border on startup
 
-sys.setcheckinterval(255)  # we don't use threads, kind of speed up
+sys.setswitchinterval(255)  # we don't use threads, kind of speed up
 
 #load.load_z80('./games/Batty.z80')
 load.load_sna('./games/Exolon.sna')

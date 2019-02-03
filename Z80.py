@@ -1,21 +1,9 @@
 import struct
 import video
+import memory
 
 show_debug_info = False
 tstatesPerInterrupt = 0
-
-
-def xbits(a):
-    for i in range(8):
-        yield((a >> i) & 0x01)
-
-
-# another very fast version for signed Byte
-def byte(a):
-    return (a > 127) and (a - 256) or a
-
-
-# ---------------------------------
 
 def Z80(clockFrequencyInMHz):
     global tstatesPerInterrupt
@@ -186,40 +174,15 @@ _IFF2 = True
 _IM = IM2
 
 
-# ** Memory
-mem = memoryview(bytearray(65536))
-
-
-# Word access
-wstruct = struct.Struct('<H')
-
-
-def pokew(addr, word):
-    global mem
-    if addr == 65535:
-        mem[65535] = word % 256
-        mem[0] = word >> 8
-    else:
-        wstruct.pack_into(mem, addr, word)
-
-
-def peekw(addr):
-    global mem
-    if addr == 65535:
-        return (mem[65535] | (mem[0] << 8)) % 65536
-    else:
-        return wstruct.unpack_from(mem, addr)[0]
-
-
 # Stack access
 def pushw(word):
     global _SP
     _SP[0] = (_SP[0] - 2) % 65536
-    pokew(_SP[0], word)
+    memory.pokew(_SP[0], word)
 
 
 def popw():
-    t = peekw(_SP[0])
+    t = memory.peekw(_SP[0])
     _SP[0] = (_SP[0] + 2) % 65536
     return t
 
@@ -234,15 +197,14 @@ def poppc():
 
 
 def nxtpcb():
-    t = mem[_PC[0]]
+    t = memory.peekb(_PC[0])
     _PC[0] = (_PC[0] + 1) % 65536
     return t
 
 
-signedbyte = struct.Struct('<b')
 def nxtpcsb():
     global show_debug_info
-    t = signedbyte.unpack_from(mem, _PC[0])[0]
+    t = memory.peeksb(_PC[0])
     _PC[0] = (_PC[0] + 1) % 65536
     if show_debug_info:
         print(f'signedbyte: {t}, PC: 0x{_PC[0]:4x}')
@@ -255,7 +217,7 @@ def incpcsb():
 
 
 def nxtpcw():
-    t = peekw(_PC[0])
+    t = memory.peekw(_PC[0])
     _PC[0] = (_PC[0] + 2) % 65536
     return t
 
@@ -297,7 +259,7 @@ def reset():
 def show_registers():
     global show_debug_info
     if show_debug_info:
-        print(f'PC: 0x{_PC[0]:04x}\tOPCODE: {mem[_PC[0]]:03d}\tA: 0x{_A[0]:02x}\tHL: 0x{_HL[0]:04x}\tBC: 0x{_BC[0]:04x}\tDE: 0x{_DE[0]:04x}')
+        print(f'PC: 0x{_PC[0]:04x}\tOPCODE: {memory.peekb(_PC[0]):03d}\tA: 0x{_A[0]:02x}\tHL: 0x{_HL[0]:04x}\tBC: 0x{_BC[0]:04x}\tDE: 0x{_DE[0]:04x}')
         print(f'FLAGS 0x{_F[0]:02x}\tC: {_fC}\tN: {_fN}\tPV: {_fPV}\t3: {_f3}\tH: {_fH}\t5: {_f5}\tZ: {_fZ}\tS: {_fS}')
         print(f'IFF1 {_IFF1}, IFF2 {_IFF2}')
 
@@ -376,7 +338,7 @@ def interruptCPU():
         pushpc()
         _IFF1 = False
         _IFF2 = False
-        _PC[0] = peekw(_Ifull[0])
+        _PC[0] = memory.peekw(_Ifull[0])
         return 19
 
     if not _IFF1:
@@ -566,41 +528,41 @@ def addhlsp():
 
 # LD (**),A/A,(**)
 def ldtobca():
-    mem[_BC[0]] = _A[0]
+    memory.pokeb(_BC[0], _A[0])
     return 7
 
 
 def ldafrombc():
-    _A[0] = mem[_BC[0]]
+    _A[0] = memory.peekb(_BC[0])
     return 7
 
 
 def ldtodea():
-    mem[_DE[0]] = _A[0]
+    memory.pokeb(_DE[0], _A[0])
     return 7
 
 
 def ldafromde():
-    _A[0] = mem[_DE[0]]
+    _A[0] = memory.peekb(_DE[0])
     return 7
 
 def ldtonnhl():
-    pokew(nxtpcw(), _HL[0])
+    memory.pokew(nxtpcw(), _HL[0])
     return 16
 
 
 def ldhlfromnn():
-    _HL[0] = peekw(nxtpcw())
+    _HL[0] = memory.peekw(nxtpcw())
     return 16
 
 
 def ldtonna():
-    mem[nxtpcw()] = _A[0]
+    memory.pokeb(nxtpcw(), _A[0])
     return 13
 
 
 def ldafromnn():
-    _A[0] = mem[nxtpcw()]
+    _A[0] = memory.peekb(nxtpcw())
     return 13
 
 
@@ -677,7 +639,7 @@ def incl():
 
 
 def incinhl():
-    mem[_HL[0]] = inc8(mem[_HL[0]])
+    memory.pokeb(_HL[0], inc8(memory.peekb(_HL[0])))
     return 11
 
 
@@ -718,7 +680,7 @@ def decl():
 
 
 def decinhl():
-    mem[_HL[0]] = dec8(mem[_HL[0]])
+    memory.pokeb(_HL[0], dec8(memory.peekb(_HL[0])))
     return 11
 
 
@@ -759,7 +721,7 @@ def ldln():
 
 
 def ldtohln():
-    mem[_HL[0]] = nxtpcb()
+    memory.pokeb(_HL[0], nxtpcb())
     return 10
 
 
@@ -922,7 +884,7 @@ def ldbl():
 
 
 def ldbfromhl():
-    _B[0] = mem[_HL[0]]
+    _B[0] = memory.peekb(_HL[0])
     return 7
 
 
@@ -962,7 +924,7 @@ def ldcl():
 
 
 def ldcfromhl():
-    _C[0] = mem[_HL[0]]
+    _C[0] = memory.peekb(_HL[0])
     return 7
 
 
@@ -1002,7 +964,7 @@ def lddl():
 
 
 def lddfromhl():
-    _D[0] = mem[_HL[0]]
+    _D[0] = memory.peekb(_HL[0])
     return 7
 
 
@@ -1042,7 +1004,7 @@ def ldel():
 
 
 def ldefromhl():
-    _E[0] = mem[_HL[0]]
+    _E[0] = memory.peekb(_HL[0])
     return 7
 
 
@@ -1082,7 +1044,7 @@ def ldhl():
 
 
 def ldhfromhl():
-    _H[0] = mem[_HL[0]]
+    _H[0] = memory.peekb(_HL[0])
     return 7
 
 
@@ -1122,7 +1084,7 @@ def ldll():
 
 
 def ldlfromhl():
-    _L[0] = mem[_HL[0]]
+    _L[0] = memory.peekb(_HL[0])
     return 7
 
 
@@ -1133,37 +1095,37 @@ def ldla():
 
 # LD (HL),*
 def ldtohlb():
-    mem[_HL[0]] = _B[0]
+    memory.pokeb(_HL[0], _B[0])
     return 7
 
 
 def ldtohlc():
-    mem[_HL[0]] = _C[0]
+    memory.pokeb(_HL[0], _C[0])
     return 7
 
 
 def ldtohld():
-    mem[_HL[0]] = _D[0]
+    memory.pokeb(_HL[0], _D[0])
     return 7
 
 
 def ldtohle():
-    mem[_HL[0]] = _E[0]
+    memory.pokeb(_HL[0], _E[0])
     return 7
 
 
 def ldtohlh():
-    mem[_HL[0]] = _H[0]
+    memory.pokeb(_HL[0], _H[0])
     return 7
 
 
 def ldtohll():
-    mem[_HL[0]] = _L[0]
+    memory.pokeb(_HL[0], _L[0])
     return 7
 
 
 def ldtohla():
-    mem[_HL[0]] = _A[0]
+    memory.pokeb(_HL[0], _A[0])
     return 7
 
 
@@ -1199,7 +1161,7 @@ def ldal():
 
 
 def ldafromhl():
-    _A[0] = mem[_HL[0]]
+    _A[0] = memory.peekb(_HL[0])
     return 7
 
 
@@ -1239,7 +1201,7 @@ def addal():
 
 
 def addafromhl():
-    add_a(mem[_HL[0]])
+    add_a(memory.peekb(_HL[0]))
     return 7
 
 
@@ -1280,7 +1242,7 @@ def adcal():
 
 
 def adcafromhl():
-    adc_a(mem[_HL[0]])
+    adc_a(memory.peekb(_HL[0]))
     return 7
 
 
@@ -1321,7 +1283,7 @@ def subal():
 
 
 def subafromhl():
-    sub_a(mem[_HL[0]])
+    sub_a(memory.peekb(_HL[0]))
     return 7
 
 
@@ -1362,7 +1324,7 @@ def sbcal():
 
 
 def sbcafromhl():
-    sbc_a(mem[_HL[0]])
+    sbc_a(memory.peekb(_HL[0]))
     return 7
 
 
@@ -1403,7 +1365,7 @@ def andal():
 
 
 def andafromhl():
-    and_a(mem[_HL[0]])
+    and_a(memory.peekb(_HL[0]))
     return 7
 
 
@@ -1444,7 +1406,7 @@ def xoral():
 
 
 def xorafromhl():
-    xor_a(mem[_HL[0]])
+    xor_a(memory.peekb(_HL[0]))
     return 7
 
 
@@ -1485,7 +1447,7 @@ def oral():
 
 
 def orafromhl():
-    or_a(mem[_HL[0]])
+    or_a(memory.peekb(_HL[0]))
     return 7
 
 
@@ -1526,7 +1488,7 @@ def cpal():
 
 
 def cpafromhl():
-    cp_a(mem[_HL[0]])
+    cp_a(memory.peekb(_HL[0]))
     return 7
 
 
@@ -1756,7 +1718,7 @@ def rlcl():
 
 
 def rlcfromhl():
-    mem[_HL[0]] = rlc(mem[_HL[0]])
+    memory.pokeb(_HL[0], rlc(memory.peekb(_HL[0])))
     return 15
 
 
@@ -1797,7 +1759,7 @@ def rrcl():
 
 
 def rrcfromhl():
-    mem[_HL[0]] = rrc(mem[_HL[0]])
+    memory.pokeb(_HL[0], rrc(memory.peekb(_HL[0])))
     return 15
 
 
@@ -1838,7 +1800,7 @@ def rll():
 
 
 def rlfromhl():
-    mem[_HL[0]] = rl(mem[_HL[0]])
+    memory.pokeb(_HL[0], rl(memory.peekb(_HL[0])))
     return 15
 
 
@@ -1879,7 +1841,7 @@ def rrl():
 
 
 def rrfromhl():
-    mem[_HL[0]] = rr(mem[_HL[0]])
+    memory.pokeb(_HL[0], rr(memory.peekb(_HL[0])))
     return 15
 
 
@@ -1920,7 +1882,7 @@ def slal():
 
 
 def slafromhl():
-    mem[_HL[0]] = sla(mem[_HL[0]])
+    memory.pokeb(_HL[0], sla(memory.peekb(_HL[0])))
     return 15
 
 
@@ -1961,7 +1923,7 @@ def sral():
 
 
 def srafromhl():
-    mem[_HL[0]] = sra(mem[_HL[0]])
+    memory.pokeb(_HL[0], sra(memory.peekb(_HL[0])))
     return 15
 
 
@@ -2002,7 +1964,7 @@ def slsl():
 
 
 def slsfromhl():
-    mem[_HL[0]] = sls(mem[_HL[0]])
+    memory.pokeb(_HL[0], sls(memory.peekb(_HL[0])))
     return 15
 
 
@@ -2043,7 +2005,7 @@ def srll():
 
 
 def srlfromhl():
-    mem[_HL[0]] = srl(mem[_HL[0]])
+    memory.pokeb(_HL[0], srl(memory.peekb(_HL[0])))
     return 15
 
 
@@ -2084,7 +2046,7 @@ def bit0l():
 
 
 def bit0fromhl():
-    bit(0x01, mem[_HL[0]])
+    bit(0x01, memory.peekb(_HL[0]))
     return 12
 
 
@@ -2125,7 +2087,7 @@ def bit1l():
 
 
 def bit1fromhl():
-    bit(0x02, mem[_HL[0]])
+    bit(0x02, memory.peekb(_HL[0]))
     return 12
 
 
@@ -2166,7 +2128,7 @@ def bit2l():
 
 
 def bit2fromhl():
-    bit(0x04, mem[_HL[0]])
+    bit(0x04, memory.peekb(_HL[0]))
     return 12
 
 
@@ -2207,7 +2169,7 @@ def bit3l():
 
 
 def bit3fromhl():
-    bit(0x08, mem[_HL[0]])
+    bit(0x08, memory.peekb(_HL[0]))
     return 12
 
 
@@ -2248,7 +2210,7 @@ def bit4l():
 
 
 def bit4fromhl():
-    bit(0x10, mem[_HL[0]])
+    bit(0x10, memory.peekb(_HL[0]))
     return 12
 
 
@@ -2289,7 +2251,7 @@ def bit5l():
 
 
 def bit5fromhl():
-    bit(0x20, mem[_HL[0]])
+    bit(0x20, memory.peekb(_HL[0]))
     return 12
 
 
@@ -2330,7 +2292,7 @@ def bit6l():
 
 
 def bit6fromhl():
-    bit(0x40, mem[_HL[0]])
+    bit(0x40, memory.peekb(_HL[0]))
     return 12
 
 
@@ -2371,7 +2333,7 @@ def bit7l():
 
 
 def bit7fromhl():
-    bit(0x80, mem[_HL[0]])
+    bit(0x80, memory.peekb(_HL[0]))
     return 12
 
 
@@ -2412,7 +2374,7 @@ def res0l():
 
 
 def res0fromhl():
-    mem[_HL[0]] = res(0x01, mem[_HL[0]])
+    memory.pokeb(_HL[0], res(0x01, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2453,7 +2415,7 @@ def res1l():
 
 
 def res1fromhl():
-    mem[_HL[0]] = res(0x02, mem[_HL[0]])
+    memory.pokeb(_HL[0], res(0x02, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2494,7 +2456,7 @@ def res2l():
 
 
 def res2fromhl():
-    mem[_HL[0]] = res(0x04, mem[_HL[0]])
+    memory.pokeb(_HL[0], res(0x04, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2535,7 +2497,7 @@ def res3l():
 
 
 def res3fromhl():
-    mem[_HL[0]] = res(0x08, mem[_HL[0]])
+    memory.pokeb(_HL[0], res(0x08, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2576,7 +2538,7 @@ def res4l():
 
 
 def res4fromhl():
-    mem[_HL[0]] = res(0x10, mem[_HL[0]])
+    memory.pokeb(_HL[0], res(0x10, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2617,7 +2579,7 @@ def res5l():
 
 
 def res5fromhl():
-    mem[_HL[0]] = res(0x20, mem[_HL[0]])
+    memory.pokeb(_HL[0], res(0x20, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2658,7 +2620,7 @@ def res6l():
 
 
 def res6fromhl():
-    mem[_HL[0]] = res(0x40, mem[_HL[0]])
+    memory.pokeb(_HL[0], res(0x40, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2699,7 +2661,7 @@ def res7l():
 
 
 def res7fromhl():
-    mem[_HL[0]] = res(0x80, mem[_HL[0]])
+    memory.pokeb(_HL[0], res(0x80, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2740,7 +2702,7 @@ def set0l():
 
 
 def set0fromhl():
-    mem[_HL[0]] = set(0x01, mem[_HL[0]])
+    memory.pokeb(_HL[0], set(0x01, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2781,7 +2743,7 @@ def set1l():
 
 
 def set1fromhl():
-    mem[_HL[0]] = set(0x02, mem[_HL[0]])
+    memory.pokeb(_HL[0], set(0x02, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2822,7 +2784,7 @@ def set2l():
 
 
 def set2fromhl():
-    mem[_HL[0]] = set(0x04, mem[_HL[0]])
+    memory.pokeb(_HL[0], set(0x04, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2863,7 +2825,7 @@ def set3l():
 
 
 def set3fromhl():
-    mem[_HL[0]] = set(0x08, mem[_HL[0]])
+    memory.peekb(_HL[0], set(0x08, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2904,7 +2866,7 @@ def set4l():
 
 
 def set4fromhl():
-    mem[_HL[0]] = set(0x10, mem[_HL[0]])
+    memory.pokeb(_HL[0], set(0x10, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2945,7 +2907,7 @@ def set5l():
 
 
 def set5fromhl():
-    mem[_HL[0]] = set(0x20, mem[_HL[0]])
+    memory.pokeb(_HL[0], set(0x20, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2986,7 +2948,7 @@ def set6l():
 
 
 def set6fromhl():
-    mem[_HL[0]] = set(0x40, mem[_HL[0]])
+    memory.pokeb(_HL[0], set(0x40, memory.peekb(_HL[0])))
     return 15
 
 
@@ -3027,7 +2989,7 @@ def set7l():
 
 
 def set7fromhl():
-    mem[_HL[0]] = set(0x80, mem[_HL[0]])
+    memory.pokeb(_HL[0], set(0x80, memory.peekb(_HL[0])))
     return 15
 
 
@@ -3091,8 +3053,8 @@ def inan():
 
 def exsphl():
     t = _HL[0]
-    _HL[0] = peekw(_SP[0])
-    pokew(_SP[0], t)
+    _HL[0] = memory.peekw(_SP[0])
+    memory.pokew(_SP[0], t)
     return 19
 
 
@@ -3477,22 +3439,22 @@ def adchlsp():
 
 # LD (nn),ss, LD ss,(nn)
 def ldtonnbc():
-    pokew(nxtpcw(), _BC[0])
+    memory.pokew(nxtpcw(), _BC[0])
     return 20
 
 
 def ldbcfromnn():
-    _BC[0] = peekw(nxtpcw())
+    _BC[0] = memory.peekw(nxtpcw())
     return 20
 
 
 def ldtonnde():
-    pokew(nxtpcw(), _DE[0])
+    memory.pokew(nxtpcw(), _DE[0])
     return 20
 
 
 def lddefromnn():
-    _DE[0] = peekw(nxtpcw())
+    _DE[0] = memory.peekw(nxtpcw())
     return 20
 
 
@@ -3505,12 +3467,12 @@ def edldhlfromnn():
 
 
 def ldtonnsp():
-    pokew(nxtpcw(), _SP[0])
+    memory.pokew(nxtpcw(), _SP[0])
     return 20
 
 
 def ldspfromnn():
-    _SP[0] = peekw(nxtpcw())
+    _SP[0] = memory.peekw(nxtpcw())
     return 20
 
 
@@ -3600,12 +3562,12 @@ def ldar():
 def rrda():
     global _fS, _f3, _f5, _fZ, _fPV, _fH, _fN
     ans = _A[0]
-    t = mem[_HL[0]]
+    t = memory.peekb(_HL[0])
     q = t
 
     t = ((t >> 4) + (ans << 4)) % 256
     ans = (ans & 0xf0) + (q % 16)
-    mem[_HL[0]] = t
+    memory.pokeb(_HL[0], t)
     _fS = (ans & F_S) != 0
     _f3 = (ans & F_3) != 0
     _f5 = (ans & F_5) != 0
@@ -3620,12 +3582,12 @@ def rrda():
 def rlda():
     global _fS, _f3, _f5, _fZ, _fPV, _fH, _fN
     ans = _A[0]
-    t = mem[_HL[0]]
+    t = memory.peekb(_HL[0])
     q = t
 
     t = ((t << 4) + (ans % 16)) % 256
     ans = ((ans & 0xf0) + (q >> 4)) % 256
-    mem[_HL[0]] = t
+    memory.pokeb(_HL[0], t)
     _fS = (ans & F_S) != 0
     _f3 = (ans & F_3) != 0
     _f5 = (ans & F_5) != 0
@@ -3639,7 +3601,7 @@ def rlda():
 # xxI
 def ldi():
     global _fPV, _fH, _fN
-    mem[_DE[0]] = mem[_HL[0]]
+    memory.pokeb(_DE[0], memory.peekb(_HL[0]))
     _DE[0] = inc16(_DE[0])
     _HL[0] = inc16(_HL[0])
     _BC[0] = dec16(_BC[0])
@@ -3652,7 +3614,7 @@ def ldi():
 def cpi():
     global _fPV, _fN, _fC
     c = _fC
-    cp_a(mem[_HL[0]])
+    cp_a(memory.peekb(_HL[0]))
     _HL[0] = inc16(_HL[0])
     _BC[0] = dec16(_BC[0])
     _fPV = _BC[0] != 0
@@ -3664,7 +3626,7 @@ def cpi():
 def ini():
     global _fPV, _fN, _fC, _fZ
     c = _fC
-    mem[_HL[0]] = inb(_BC[0])
+    memory.pokeb(_HL[0], inb(_BC[0]))
     _HL[0] = inc16(_HL[0])
     _B[0] = qdec8(_B[0])
     _fC = c
@@ -3676,7 +3638,7 @@ def ini():
 def outi():
     global _fPV, _fN, _fC
     c = _fC
-    outb(_BC[0], mem[_HL[0]])
+    outb(_BC[0], memory.peekb(_HL[0]))
     _HL[0] = inc16(_HL[0])
     _B[0] = qdec8(_B[0])
     _fC = c
@@ -3688,7 +3650,7 @@ def outi():
 # xxD
 def ldd():
     global _fPV, _fH, _fN
-    mem[_DE[0]] = mem[_HL[0]]
+    memory.pokeb(_DE[0], memory.peekb(_HL[0]))
     _DE[0] = dec16(_DE[0])
     _HL[0] = dec16(_HL[0])
     _BC[0] = dec16(_BC[0])
@@ -3701,7 +3663,7 @@ def ldd():
 def cpd():
     global _fPV, _fN, _fC
     c = _fC
-    cp_a(mem[_HL[0]])
+    cp_a(memory.peekb(_HL[0]))
     _HL[0] = dec16(_HL[0])
     _BC[0] = dec16(_BC[0])
     _fC = c
@@ -3712,7 +3674,7 @@ def cpd():
 
 def ind():
     global _fZ, _fN
-    mem[_HL[0]] = inb(_BC[0])
+    memory.pokeb(_HL[0], inb(_BC[0]))
     _HL[0] = dec16(_HL[0])
     _B[0] = qdec8(_B[0])
     _fN = True
@@ -3722,7 +3684,7 @@ def ind():
 
 def outd():
     global _fZ, _fN
-    outb(_BC[0], mem[_HL[0]])
+    outb(_BC[0], memory.peekb(_HL[0]))
     _HL[0] = dec16(_HL[0])
     _B[0] = qdec8(_B[0])
     _fN = True
@@ -3735,7 +3697,7 @@ def ldir():
     global _fPV, _R7_b, local_tstates, _fN, _fH
     _fPV = True
     while True:
-        mem[_DE[0]] = mem[_HL[0]]
+        memory.pokeb(_DE[0], memory.peekb(_HL[0]))
         _DE[0] = (_DE[0] + 1) % 65536
         _HL[0] = (_HL[0] + 1) % 65536
         _BC[0] = (_BC[0] - 1) % 65536
@@ -3755,7 +3717,7 @@ def cpir():
     c = _fC
     _fPV = True
     while True:
-        cp_a(mem[_HL[0]])
+        cp_a(memory.peekb(_HL[0]))
         _HL[0] = (_HL[0] + 1) % 65536
         _BC[0] = (_BC[0] - 1) % 65536
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
@@ -3772,7 +3734,7 @@ def cpir():
 def inir():
     global _fN, _fC, _fZ, _R7_b, local_tstates
     while True:
-        mem[_HL] = inb(_BC[0])
+        memory.pokeb(_HL, inb(_BC[0]))
         _HL[0] = (_HL[0] + 1) % 65536
         _B[0] = (_B[0] - 1) % 256
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
@@ -3788,7 +3750,7 @@ def inir():
 def otir():
     global _fN, _fZ, _R7_b, local_tstates
     while True:
-        outb(_BC[0], mem[_HL[0]])
+        outb(_BC[0], memory.peekb(_HL[0]))
         _HL[0] = (_HL[0] + 1) % 65536
         _B[0] = (_B[0] - 1) % 256
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
@@ -3806,7 +3768,7 @@ def lddr():
     global _fPV, _R7_b, local_tstates, _fH, _fN
     _fPV = True
     while True:
-        mem[_DE[0]] = mem[_HL[0]]
+        memory.pokeb(_DE[0], memory.peekb(_HL[0]))
         _DE[0] = (_DE[0] - 1) % 65536
         _HL[0] = (_HL[0] - 1) % 65536
         _BC[0] = (_BC[0] - 1) % 65536
@@ -3826,7 +3788,7 @@ def cpdr():
     c = _fC
     _fPV = True
     while True:
-        cp_a(mem[_HL[0]])
+        cp_a(memory.peekb(_HL[0]))
         _HL[0] = (_HL[0] - 1) % 65536
         _BC[0] = (_BC[0] - 1) % 65536
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
@@ -3843,7 +3805,7 @@ def cpdr():
 def indr():
     global _fN, _fC, _fZ, _R7_b, local_tstates
     while True:
-        mem[_HL] = inb(_BC[0])
+        memory.pokeb(_HL, inb(_BC[0]))
         _HL[0] = (_HL[0] - 1) % 65536
         _B[0] = (_B[0] - 1) % 256
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
@@ -3859,7 +3821,7 @@ def indr():
 def otdr():
     global _fN, _fZ, _R7_b, local_tstates
     while True:
-        outb(_BC[0], mem[_HL[0]])
+        outb(_BC[0], memory.peekb(_HL[0]))
         _HL[0] = (_HL[0] - 1) % 65536
         _B[0] = (_B[0] - 1) % 256
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
@@ -3973,12 +3935,12 @@ def ldidnn():
 
 
 def ldtonnid():
-    pokew(nxtpcw(), _ID[0])
+    memory.pokew(nxtpcw(), _ID[0])
     return 20
 
 
 def ldidfromnn():
-    _ID[0] = peekw(nxtpcw())
+    _ID[0] = memory.peekw(nxtpcw())
     return 20
 
 
@@ -4000,7 +3962,7 @@ def incidl():
 
 def incinidd():
     z = ID_d()
-    mem[z] = inc8(mem[z])
+    memory.pokeb(z, inc8(memory.peekb(z)))
     return 23
     
 
@@ -4022,7 +3984,7 @@ def decidl():
 
 def decinidd():
     z = ID_d()
-    mem[z] = dec8(mem[z])
+    memory.pokeb(z, dec8(memory.peekb(z)))
     return 23
 
 
@@ -4160,78 +4122,78 @@ def ldidla():
 
 # LD *, (ID+d)
 def ldbfromidd():
-    _B[0] = mem[ID_d()]
+    _B[0] = memory.peekb(ID_d())
     return 19
 
 
 def ldcfromidd():
-    _C[0] = mem[ID_d()]
+    _C[0] = memory.peekb(ID_d())
     return 19
 
 
 def lddfromidd():
-    _D[0] = mem[ID_d()]
+    _D[0] = memory.peekb(ID_d())
     return 19
 
 
 def ldefromidd():
-    _E[0] = mem[ID_d()]
+    _E[0] = memory.peekb(ID_d())
     return 19
 
 
 def ldhfromidd():
-    _H[0] = mem[ID_d()]
+    _H[0] = memory.peekb(ID_d())
     return 19
 
 
 def ldlfromidd():
-    _L[0] = mem[ID_d()]
+    _L[0] = memory.peekb(ID_d())
     return 19
 
 
 def ldafromidd():
-    _A[0] = mem[ID_d()]
+    _A[0] = memory.peekb(ID_d())
     return 19
 
 
 # LD (ID+d), *
 def ldtoiddb():
-    mem[ID_d()] = _B[0]
+    memory.pokeb(ID_d(), _B[0])
     return 19
 
 
 def ldtoiddc():
-    mem[ID_d()] = _C[0]
+    memory.pokeb(ID_d(), _C[0])
     return 19
 
 
 def ldtoiddd():
-    mem[ID_d()] = _D[0]
+    memory.pokeb(ID_d(), _D[0])
     return 19
 
 
 def ldtoidde():
-    mem[ID_d()] = _E[0]
+    memory.pokeb(ID_d(), _E[0])
     return 19
 
 
 def ldtoiddh():
-    mem[ID_d()] = _H[0]
+    memory.pokeb(ID_d(), _H[0])
     return 19
 
 
 def ldtoiddl():
-    mem[ID_d()] = _L[0]
+    memory.pokeb(ID_d(), _L[0])
     return 19
 
 
 def ldtoiddn():
-    mem[ID_d()] = nxtpcb()
+    memory.pokeb(ID_d(), nxtpcb())
     return 19
 
 
 def ldtoidda():
-    mem[ID_d()] = _A[0]
+    memory.pokeb(ID_d(), _A[0])
     return 19
 
 
@@ -4247,7 +4209,7 @@ def addaidl():
 
 
 def addafromidd():
-    add_a(mem[ID_d()])
+    add_a(memory.peekb(ID_d()))
     return 19
 
 
@@ -4262,7 +4224,7 @@ def adcaidl():
 
 
 def adcafromidd():
-    adc_a(mem[ID_d()])
+    adc_a(memory.peekb(ID_d()))
     return 19
 
 
@@ -4278,7 +4240,7 @@ def subaidl():
 
 
 def subafromidd():
-    sub_a(mem[ID_d()])
+    sub_a(memory.peekb(ID_d()))
     return 19
 
 
@@ -4293,7 +4255,7 @@ def sbcaidl():
 
 
 def sbcafromidd():
-    sbc_a(mem[ID_d()])
+    sbc_a(memory.peekb(ID_d()))
     return 19
 
 
@@ -4309,7 +4271,7 @@ def andaidl():
 
 
 def andafromidd():
-    and_a(mem[ID_d()])
+    and_a(memory.peekb(ID_d()))
     return 19
 
 
@@ -4324,7 +4286,7 @@ def xoraidl():
 
 
 def xorafromidd():
-    xor_a(mem[ID_d()])
+    xor_a(memory.peekb(ID_d()))
     return 19
 
 
@@ -4339,7 +4301,7 @@ def oraidl():
 
 
 def orafromidd():
-    or_a(mem[ID_d()])
+    or_a(memory.peekb(ID_d()))
     return 19
 
 
@@ -4355,7 +4317,7 @@ def cpaidl():
 
 
 def cpafromidd():
-    cp_a(mem[ID_d()])
+    cp_a(memory.peekb(ID_d()))
     return 19
 
 
@@ -4383,8 +4345,8 @@ def ldspid():
 def exfromspid():
     t = _ID[0]
     sp = _SP[0]
-    _ID[0] = peekw(sp)
-    pokew(sp, t)
+    _ID[0] = memory.peekw(sp)
+    memory.pokew(sp, t)
     return 23
 
 
@@ -4424,1193 +4386,1186 @@ def ID_d():
 # DDCB/FDCB opcodes
 # RLC *
 def cbrlcb(z):
-    _B[0] = rlc(mem[z])
-    mem[z] = _B[0]
+    _B[0] = rlc(memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 def cbrlcc(z):
-    _C[0] = rlc(mem[z])
-    mem[z] = _C[0]
+    _C[0] = rlc(memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbrlcd(z):
-    _D[0] = rlc(mem[z])
-    mem[z] = _D[0]
+    _D[0] = rlc(memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbrlce(z):
-    _E[0] = rlc(mem[z])
-    mem[z] = _E[0]
+    _E[0] = rlc(memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbrlch(z):
-    _H[0] = rlc(mem[z])
-    mem[z] = _H[0]
+    _H[0] = rlc(memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbrlcl(z):
-    _L[0] = rlc(mem[z])
-    mem[z] = _L[0]
+    _L[0] = rlc(memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbrlcinhl(z):
-    mem[z] = rlc(mem[z])
+    memory.pokeb(z, rlc(memory.peekb(z)))
     return 23
 
 
 def cbrlca(z):
-    _A[0] = rlc(mem[z])
-    mem[z] = _A[0]
+    _A[0] = rlc(memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # RRC *
 def cbrrcb(z):
-    _B[0] = rrc(mem[z])
-    mem[z] = _B[0]
+    _B[0] = rrc(memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 def cbrrcc(z):
-    _C[0] = rrc(mem[z])
-    mem[z] = _C[0]
+    _C[0] = rrc(memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbrrcd(z):
-    _D[0] = rrc(mem[z])
-    mem[z] = _D[0]
+    _D[0] = rrc(memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbrrce(z):
-    _E[0] = rrc(mem[z])
-    mem[z] = _E[0]
+    _E[0] = rrc(memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbrrch(z):
-    _H[0] = rrc(mem[z])
-    mem[z] = _H[0]
+    _H[0] = rrc(memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbrrcl(z):
-    _L[0] = rrc(mem[z])
-    mem[z] = _L[0]
+    _L[0] = rrc(memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbrrcinhl(z):
-    mem[z] = rrc(mem[z])
+    memory.pokeb(z, rrc(memory.peekb(z)))
     return 23
 
 
 def cbrrca(z):
-    _A[0] = rrc(mem[z])
-    mem[z] = _A[0]
+    _A[0] = rrc(memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # RL *
 def cbrlb(z):
-    _B[0] = rl(mem[z])
-    mem[z] = _B[0]
+    _B[0] = rl(memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 def cbrlc(z):
-    _C[0] = rl(mem[z])
-    mem[z] = _C[0]
+    _C[0] = rl(memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbrld(z):
-    _D[0] = rl(mem[z])
-    mem[z] = _D[0]
+    _D[0] = rl(memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbrle(z):
-    _E[0] = rl(mem[z])
-    mem[z] = _E[0]
+    _E[0] = rl(memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbrlh(z):
-    _H[0] = rl(mem[z])
-    mem[z] = _H[0]
+    _H[0] = rl(memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbrll(z):
-    _L[0] = rl(mem[z])
-    mem[z] = _L[0]
+    _L[0] = rl(memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbrlinhl(z):
-    mem[z] = rl(mem[z])
+    memory.pokeb(z, rl(memory.peekb(z)))
     return 23
 
 
 def cbrla(z):
-    _A[0] = rl(mem[z])
-    mem[z] = _A[0]
+    _A[0] = rl(memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # RR *
 def cbrrb(z):
-    _B[0] = rr(mem[z])
-    mem[z] = _B[0]
+    _B[0] = rr(memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 def cbrrc(z):
-    _C[0] = rr(mem[z])
-    mem[z] = _C[0]
+    _C[0] = rr(memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbrrd(z):
-    _D[0] = rr(mem[z])
-    mem[z] = _D[0]
+    _D[0] = rr(memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbrre(z):
-    _E[0] = rr(mem[z])
-    mem[z] = _E[0]
+    _E[0] = rr(memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbrrh(z):
-    _H[0] = rr(mem[z])
-    mem[z] = _H[0]
+    _H[0] = rr(memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbrrl(z):
-    _L[0] = rr(mem[z])
-    mem[z] = _L[0]
+    _L[0] = rr(memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbrrinhl(z):
-    mem[z] = rr(mem[z])
+    memory.pokeb(z, rr(memory.peekb(z)))
     return 23
 
 
 def cbrra(z):
-    _A[0] = rr(mem[z])
-    mem[z] = _A[0]
+    _A[0] = rr(memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # SLA *
 def cbslab(z):
-    _B[0] = sla(mem[z])
-    mem[z] = _B[0]
+    _B[0] = sla(memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 def cbslac(z):
-    _C[0] = sla(mem[z])
-    mem[z] = _C[0]
+    _C[0] = sla(memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbslad(z):
-    _D[0] = sla(mem[z])
-    mem[z] = _D[0]
+    _D[0] = sla(memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbslae(z):
-    _E[0] = sla(mem[z])
-    mem[z] = _E[0]
+    _E[0] = sla(memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbslah(z):
-    _H[0] = sla(mem[z])
-    mem[z] = _H[0]
+    _H[0] = sla(memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbslal(z):
-    _L[0] = sla(mem[z])
-    mem[z] = _L[0]
+    _L[0] = sla(memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbslainhl(z):
-    mem[z] = sla(mem[z])
+    memory.pokeb(z, sla(memory.peekb(z)))
     return 23
 
 
 def cbslaa(z):
-    _A[0] = sla(mem[z])
-    mem[z] = _A[0]
+    _A[0] = sla(memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # SRA *
 def cbsrab(z):
-    _B[0] = sra(mem[z])
-    mem[z] = _B[0]
+    _B[0] = sra(memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 def cbsrac(z):
-    _C[0] = sra(mem[z])
-    mem[z] = _C[0]
+    _C[0] = sra(memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbsrad(z):
-    _D[0] = sra(mem[z])
-    mem[z] = _D[0]
+    _D[0] = sra(memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbsrae(z):
-    _E[0] = sra(mem[z])
-    mem[z] = _E[0]
+    _E[0] = sra(memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbsrah(z):
-    _H[0] = sra(mem[z])
-    mem[z] = _H[0]
+    _H[0] = sra(memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbsral(z):
-    _L[0] = sra(mem[z])
-    mem[z] = _L[0]
+    _L[0] = sra(memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbsrainhl(z):
-    mem[z] = sra(mem[z])
+    memory.pokeb(z, sra(memory.peekb(z)))
     return 23
 
 
 def cbsraa(z):
-    _A[0] = sra(mem[z])
-    mem[z] = _A[0]
+    _A[0] = sra(memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # SLS *
 def cbslsb(z):
-    _B[0] = sls(mem[z])
-    mem[z] = _B[0]
+    _B[0] = sls(memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 def cbslsc(z):
-    _C[0] = sls(mem[z])
-    mem[z] = _C[0]
+    _C[0] = sls(memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbslsd(z):
-    _D[0] = sls(mem[z])
-    mem[z] = _D[0]
+    _D[0] = sls(memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbslse(z):
-    _E[0] = sls(mem[z])
-    mem[z] = _E[0]
+    _E[0] = sls(memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbslsh(z):
-    _H[0] = sls(mem[z])
-    mem[z] = _H[0]
+    _H[0] = sls(memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbslsl(z):
-    _L[0] = sls(mem[z])
-    mem[z] = _L[0]
+    _L[0] = sls(memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbslsinhl(z):
-    mem[z] = sls(mem[z])
+    memory.pokeb(z, sls(memory.peekb(z)))
     return 23
 
 
 def cbslsa(z):
-    _A[0] = sls(mem[z])
-    mem[z] = _A[0]
+    _A[0] = sls(memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # SRL *
 def cbsrlb(z):
-    _B[0] = srl(mem[z])
-    mem[z] = _B[0]
+    _B[0] = srl(memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 def cbsrlc(z):
-    _C[0] = srl(mem[z])
-    mem[z] = _C[0]
+    _C[0] = srl(memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbsrld(z):
-    _D[0] = srl(mem[z])
-    mem[z] = _D[0]
+    _D[0] = srl(memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbsrle(z):
-    _E[0] = srl(mem[z])
-    mem[z] = _E[0]
+    _E[0] = srl(memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbsrlh(z):
-    _H[0] = srl(mem[z])
-    mem[z] = _H[0]
+    _H[0] = srl(memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbsrll(z):
-    _L[0] = srl(mem[z])
-    mem[z] = _L[0]
+    _L[0] = srl(memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbsrlinhl(z):
-    mem[z] = srl(mem[z])
+    memory.pokeb(z, srl(memory.peekb(z)))
     return 23
 
 
 def cbsrla(z):
-    _A[0] = srl(mem[z])
-    mem[z] = _A[0]
+    _A[0] = srl(memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # BIT *
 def cbbit0(z):
-    bit(0x01, mem[z])
+    bit(0x01, memory.peekb(z))
     return 20
 
 
 def cbbit1(z):
-    bit(0x02, mem[z])
+    bit(0x02, memory.peekb(z))
     return 20
 
 
 def cbbit2(z):
-    bit(0x04, mem[z])
+    bit(0x04, memory.peekb(z))
     return 20
 
 
 def cbbit3(z):
-    bit(0x08, mem[z])
+    bit(0x08, memory.peekb(z))
     return 20
 
 
 def cbbit4(z):
-    bit(0x10, mem[z])
+    bit(0x10, memory.peekb(z))
     return 20
 
 
 def cbbit5(z):
-    bit(0x20, mem[z])
+    bit(0x20, memory.peekb(z))
     return 20
 
 
 def cbbit6(z):
-    bit(0x40, mem[z])
+    bit(0x40, memory.peekb(z))
     return 20
 
 
 def cbbit7(z):
-    bit(0x80, mem[z])
+    bit(0x80, memory.peekb(z))
     return 20
 
 
 # RES 0, *
 def cbres0b(z):
-    _B[0] = res(0x01, mem[z])
-    mem[z] = _B[0]
+    _B[0] = res(0x01, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbres0c(z):
-    _C[0] = res(0x01, mem[z])
-    mem[z] = _C[0]
+    _C[0] = res(0x01, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbres0d(z):
-    _D[0] = res(0x01, mem[z])
-    mem[z] = _D[0]
+    _D[0] = res(0x01, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbres0e(z):
-    _E[0] = res(0x01, mem[z])
-    mem[z] = _E[0]
+    _E[0] = res(0x01, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbres0h(z):
-    _H[0] = res(0x01, mem[z])
-    mem[z] = _H[0]
+    _H[0] = res(0x01, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbres0l(z):
-    _L[0] = res(0x01, mem[z])
-    mem[z] = _L[0]
+    _L[0] = res(0x01, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbres0inhl(z):
-    mem[z] = res(0x01, mem[z])
+    memory.pokeb(z, res(0x01, memory.peekb(z)))
     return 23
 
 
 def cbres0a(z):
-    _A[0] = res(0x01, mem[z])
-    mem[z] = _A[0]
+    _A[0] = res(0x01, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # RES 1, *
 def cbres1b(z):
-    _B[0] = res(0x02, mem[z])
-    mem[z] = _B[0]
+    _B[0] = res(0x02, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbres1c(z):
-    _C[0] = res(0x02, mem[z])
-    mem[z] = _C[0]
+    _C[0] = res(0x02, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbres1d(z):
-    _D[0] = res(0x02, mem[z])
-    mem[z] = _D[0]
+    _D[0] = res(0x02, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbres1e(z):
-    _E[0] = res(0x02, mem[z])
-    mem[z] = _E[0]
+    _E[0] = res(0x02, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbres1h(z):
-    _H[0] = res(0x02, mem[z])
-    mem[z] = _H[0]
+    _H[0] = res(0x02, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbres1l(z):
-    _L[0] = res(0x02, mem[z])
-    mem[z] = _L[0]
+    _L[0] = res(0x02, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbres1inhl(z):
-    mem[z] = res(0x02, mem[z])
+    memory.pokeb(z, res(0x02, memory.peekb(z)))
     return 23
 
 
 def cbres1a(z):
-    _A[0] = res(0x02, mem[z])
-    mem[z] = _A[0]
+    _A[0] = res(0x02, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # RES 2, *
 def cbres2b(z):
-    _B[0] = res(0x04, mem[z])
-    mem[z] = _B[0]
+    _B[0] = res(0x04, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbres2c(z):
-    _C[0] = res(0x04, mem[z])
-    mem[z] = _C[0]
+    _C[0] = res(0x04, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbres2d(z):
-    _D[0] = res(0x04, mem[z])
-    mem[z] = _D[0]
+    _D[0] = res(0x04, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbres2e(z):
-    _E[0] = res(0x04, mem[z])
-    mem[z] = _E[0]
+    _E[0] = res(0x04, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbres2h(z):
-    _H[0] = res(0x04, mem[z])
-    mem[z] = _H[0]
+    _H[0] = res(0x04, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbres2l(z):
-    _L[0] = res(0x04, mem[z])
-    mem[z] = _L[0]
+    _L[0] = res(0x04, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbres2inhl(z):
-    mem[z] = res(0x04, mem[z])
+    memory.pokeb(z, res(0x04, memory.peekb(z)))
     return 23
 
 
 def cbres2a(z):
-    _A[0] = res(0x04, mem[z])
-    mem[z] = _A[0]
+    _A[0] = res(0x04, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # RES 3, *
 def cbres3b(z):
-    _B[0] = res(0x08, mem[z])
-    mem[z] = _B[0]
+    _B[0] = res(0x08, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbres3c(z):
-    _C[0] = res(0x08, mem[z])
-    mem[z] = _C[0]
+    _C[0] = res(0x08, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbres3d(z):
-    _D[0] = res(0x08, mem[z])
-    mem[z] = _D[0]
+    _D[0] = res(0x08, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbres3e(z):
-    _E[0] = res(0x08, mem[z])
-    mem[z] = _E[0]
+    _E[0] = res(0x08, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbres3h(z):
-    _H[0] = res(0x08, mem[z])
-    mem[z] = _H[0]
+    _H[0] = res(0x08, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbres3l(z):
-    _L[0] = res(0x08, mem[z])
-    mem[z] = _L[0]
+    _L[0] = res(0x08, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbres3inhl(z):
-    mem[z] = res(0x08, mem[z])
+    memory.pokeb(z, res(0x08, memory.peekb(z)))
     return 23
 
 
 def cbres3a(z):
-    _A[0] = res(0x08, mem[z])
-    mem[z] = _A[0]
+    _A[0] = res(0x08, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # RES 4, *
 def cbres4b(z):
-    _B[0] = res(0x10, mem[z])
-    mem[z] = _B[0]
+    _B[0] = res(0x10, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbres4c(z):
-    _C[0] = res(0x10, mem[z])
-    mem[z] = _C[0]
+    _C[0] = res(0x10, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbres4d(z):
-    _D[0] = res(0x10, mem[z])
-    mem[z] = _D[0]
+    _D[0] = res(0x10, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbres4e(z):
-    _E[0] = res(0x10, mem[z])
-    mem[z] = _E[0]
+    _E[0] = res(0x10, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbres4h(z):
-    _H[0] = res(0x10, mem[z])
-    mem[z] = _H[0]
+    _H[0] = res(0x10, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbres4l(z):
-    _L[0] = res(0x10, mem[z])
-    mem[z] = _L[0]
+    _L[0] = res(0x10, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbres4inhl(z):
-    mem[z] = res(0x10, mem[z])
+    memory.pokeb(z, res(0x10, memory.peekb(z)))
     return 23
 
 
 def cbres4a(z):
-    _A[0] = res(0x10, mem[z])
-    mem[z] = _A[0]
+    _A[0] = res(0x10, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # RES 5, *
 def cbres5b(z):
-    _B[0] = res(0x20, mem[z])
-    mem[z] = _B[0]
+    _B[0] = res(0x20, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbres5c(z):
-    _C[0] = res(0x20, mem[z])
-    mem[z] = _C[0]
+    _C[0] = res(0x20, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbres5d(z):
-    _D[0] = res(0x20, mem[z])
-    mem[z] = _D[0]
+    _D[0] = res(0x20, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbres5e(z):
-    _E[0] = res(0x20, mem[z])
-    mem[z] = _E[0]
+    _E[0] = res(0x20, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbres5h(z):
-    _H[0] = res(0x20, mem[z])
-    mem[z] = _H[0]
+    _H[0] = res(0x20, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbres5l(z):
-    _L[0] = res(0x20, mem[z])
-    mem[z] = _L[0]
+    _L[0] = res(0x20, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbres5inhl(z):
-    mem[z] = res(0x20, mem[z])
+    memory.pokeb(z, res(0x20, memory.peekb(z)))
     return 23
 
 
 def cbres5a(z):
-    _A[0] = res(0x20, mem[z])
-    mem[z] = _A[0]
+    _A[0] = res(0x20, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # RES 6, *
 def cbres6b(z):
-    _B[0] = res(0x40, mem[z])
-    mem[z] = _B[0]
+    _B[0] = res(0x40, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbres6c(z):
-    _C[0] = res(0x40, mem[z])
-    mem[z] = _C[0]
+    _C[0] = res(0x40, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbres6d(z):
-    _D[0] = res(0x40, mem[z])
-    mem[z] = _D[0]
+    _D[0] = res(0x40, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbres6e(z):
-    _E[0] = res(0x40, mem[z])
-    mem[z] = _E[0]
+    _E[0] = res(0x40, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbres6h(z):
-    _H[0] = res(0x40, mem[z])
-    mem[z] = _H[0]
+    _H[0] = res(0x40, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbres6l(z):
-    _L[0] = res(0x40, mem[z])
-    mem[z] = _L[0]
+    _L[0] = res(0x40, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbres6inhl(z):
-    mem[z] = res(0x40, mem[z])
+    memory.pokeb(z, res(0x40, memory.peekb(z)))
     return 23
 
 
 def cbres6a(z):
-    _A[0] = res(0x40, mem[z])
-    mem[z] = _A[0]
+    _A[0] = res(0x40, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # RES 7, *
 def cbres7b(z):
-    _B[0] = res(0x80, mem[z])
-    mem[z] = _B[0]
+    _B[0] = res(0x80, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbres7c(z):
-    _C[0] = res(0x80, mem[z])
-    mem[z] = _C[0]
+    _C[0] = res(0x80, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbres7d(z):
-    _D[0] = res(0x80, mem[z])
-    mem[z] = _D[0]
+    _D[0] = res(0x80, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbres7e(z):
-    _E[0] = res(0x80, mem[z])
-    mem[z] = _E[0]
+    _E[0] = res(0x80, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbres7h(z):
-    _H[0] = res(0x80, mem[z])
-    mem[z] = _H[0]
+    _H[0] = res(0x80, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbres7l(z):
-    _L[0] = res(0x80, mem[z])
-    mem[z] = _L[0]
+    _L[0] = res(0x80, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbres7inhl(z):
-    mem[z] = res(0x80, mem[z])
+    memory.pokeb(z, res(0x80, memory.peekb(z)))
     return 23
 
 
 def cbres7a(z):
-    _A[0] = res(0x80, mem[z])
-    mem[z] = _A[0]
+    _A[0] = res(0x80, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
-
-
-
-
-
-
-
 
 
 # SET 0, *
 def cbset0b(z):
-    _B[0] = set(0x01, mem[z])
-    mem[z] = _B[0]
+    _B[0] = set(0x01, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbset0c(z):
-    _C[0] = set(0x01, mem[z])
-    mem[z] = _C[0]
+    _C[0] = set(0x01, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbset0d(z):
-    _D[0] = set(0x01, mem[z])
-    mem[z] = _D[0]
+    _D[0] = set(0x01, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbset0e(z):
-    _E[0] = set(0x01, mem[z])
-    mem[z] = _E[0]
+    _E[0] = set(0x01, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbset0h(z):
-    _H[0] = set(0x01, mem[z])
-    mem[z] = _H[0]
+    _H[0] = set(0x01, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbset0l(z):
-    _L[0] = set(0x01, mem[z])
-    mem[z] = _L[0]
+    _L[0] = set(0x01, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbset0inhl(z):
-    mem[z] = set(0x01, mem[z])
+    memory.pokeb(z, set(0x01, memory.peekb(z)))
     return 23
 
 
 def cbset0a(z):
-    _A[0] = set(0x01, mem[z])
-    mem[z] = _A[0]
+    _A[0] = set(0x01, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # SET 1, *
 def cbset1b(z):
-    _B[0] = set(0x02, mem[z])
-    mem[z] = _B[0]
+    _B[0] = set(0x02, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbset1c(z):
-    _C[0] = set(0x02, mem[z])
-    mem[z] = _C[0]
+    _C[0] = set(0x02, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbset1d(z):
-    _D[0] = set(0x02, mem[z])
-    mem[z] = _D[0]
+    _D[0] = set(0x02, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbset1e(z):
-    _E[0] = set(0x02, mem[z])
-    mem[z] = _E[0]
+    _E[0] = set(0x02, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbset1h(z):
-    _H[0] = set(0x02, mem[z])
-    mem[z] = _H[0]
+    _H[0] = set(0x02, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbset1l(z):
-    _L[0] = set(0x02, mem[z])
-    mem[z] = _L[0]
+    _L[0] = set(0x02, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbset1inhl(z):
-    mem[z] = set(0x02, mem[z])
+    memory.pokeb(z, set(0x02, memory.peekb(z)))
     return 23
 
 
 def cbset1a(z):
-    _A[0] = set(0x02, mem[z])
-    mem[z] = _A[0]
+    _A[0] = set(0x02, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # SET 2, *
 def cbset2b(z):
-    _B[0] = set(0x04, mem[z])
-    mem[z] = _B[0]
+    _B[0] = set(0x04, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbset2c(z):
-    _C[0] = set(0x04, mem[z])
-    mem[z] = _C[0]
+    _C[0] = set(0x04, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbset2d(z):
-    _D[0] = set(0x04, mem[z])
-    mem[z] = _D[0]
+    _D[0] = set(0x04, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbset2e(z):
-    _E[0] = set(0x04, mem[z])
-    mem[z] = _E[0]
+    _E[0] = set(0x04, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbset2h(z):
-    _H[0] = set(0x04, mem[z])
-    mem[z] = _H[0]
+    _H[0] = set(0x04, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbset2l(z):
-    _L[0] = set(0x04, mem[z])
-    mem[z] = _L[0]
+    _L[0] = set(0x04, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbset2inhl(z):
-    mem[z] = set(0x04, mem[z])
+    memory.pokeb(z, set(0x04, memory.peekb(z)))
     return 23
 
 
 def cbset2a(z):
-    _A[0] = set(0x04, mem[z])
-    mem[z] = _A[0]
+    _A[0] = set(0x04, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # SET 3, *
 def cbset3b(z):
-    _B[0] = set(0x08, mem[z])
-    mem[z] = _B[0]
+    _B[0] = set(0x08, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbset3c(z):
-    _C[0] = set(0x08, mem[z])
-    mem[z] = _C[0]
+    _C[0] = set(0x08, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbset3d(z):
-    _D[0] = set(0x08, mem[z])
-    mem[z] = _D[0]
+    _D[0] = set(0x08, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbset3e(z):
-    _E[0] = set(0x08, mem[z])
-    mem[z] = _E[0]
+    _E[0] = set(0x08, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbset3h(z):
-    _H[0] = set(0x08, mem[z])
-    mem[z] = _H[0]
+    _H[0] = set(0x08, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbset3l(z):
-    _L[0] = set(0x08, mem[z])
-    mem[z] = _L[0]
+    _L[0] = set(0x08, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbset3inhl(z):
-    mem[z] = set(0x08, mem[z])
+    memory.pokeb(z, set(0x08, memory.peekb(z)))
     return 23
 
 
 def cbset3a(z):
-    _A[0] = set(0x08, mem[z])
-    mem[z] = _A[0]
+    _A[0] = set(0x08, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # SET 4, *
 def cbset4b(z):
-    _B[0] = set(0x10, mem[z])
-    mem[z] = _B[0]
+    _B[0] = set(0x10, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbset4c(z):
-    _C[0] = set(0x10, mem[z])
-    mem[z] = _C[0]
+    _C[0] = set(0x10, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbset4d(z):
-    _D[0] = set(0x10, mem[z])
-    mem[z] = _D[0]
+    _D[0] = set(0x10, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbset4e(z):
-    _E[0] = set(0x10, mem[z])
-    mem[z] = _E[0]
+    _E[0] = set(0x10, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbset4h(z):
-    _H[0] = set(0x10, mem[z])
-    mem[z] = _H[0]
+    _H[0] = set(0x10, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbset4l(z):
-    _L[0] = set(0x10, mem[z])
-    mem[z] = _L[0]
+    _L[0] = set(0x10, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbset4inhl(z):
-    mem[z] = set(0x10, mem[z])
+    memory.pokeb(z, set(0x10, memory.peekb(z)))
     return 23
 
 
 def cbset4a(z):
-    _A[0] = set(0x10, mem[z])
-    mem[z] = _A[0]
+    _A[0] = set(0x10, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # SET 5, *
 def cbset5b(z):
-    _B[0] = set(0x20, mem[z])
-    mem[z] = _B[0]
+    _B[0] = set(0x20, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbset5c(z):
-    _C[0] = set(0x20, mem[z])
-    mem[z] = _C[0]
+    _C[0] = set(0x20, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbset5d(z):
-    _D[0] = set(0x20, mem[z])
-    mem[z] = _D[0]
+    _D[0] = set(0x20, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbset5e(z):
-    _E[0] = set(0x20, mem[z])
-    mem[z] = _E[0]
+    _E[0] = set(0x20, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbset5h(z):
-    _H[0] = set(0x20, mem[z])
-    mem[z] = _H[0]
+    _H[0] = set(0x20, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbset5l(z):
-    _L[0] = set(0x20, mem[z])
-    mem[z] = _L[0]
+    _L[0] = set(0x20, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbset5inhl(z):
-    mem[z] = set(0x20, mem[z])
+    memory.pokeb(z, set(0x20, memory.peekb(z)))
     return 23
 
 
 def cbset5a(z):
-    _A[0] = set(0x20, mem[z])
-    mem[z] = _A[0]
+    _A[0] = set(0x20, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # SET 6, *
 def cbset6b(z):
-    _B[0] = set(0x40, mem[z])
-    mem[z] = _B[0]
+    _B[0] = set(0x40, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbset6c(z):
-    _C[0] = set(0x40, mem[z])
-    mem[z] = _C[0]
+    _C[0] = set(0x40, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbset6d(z):
-    _D[0] = set(0x40, mem[z])
-    mem[z] = _D[0]
+    _D[0] = set(0x40, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbset6e(z):
-    _E[0] = set(0x40, mem[z])
-    mem[z] = _E[0]
+    _E[0] = set(0x40, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbset6h(z):
-    _H[0] = set(0x40, mem[z])
-    mem[z] = _H[0]
+    _H[0] = set(0x40, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbset6l(z):
-    _L[0] = set(0x40, mem[z])
-    mem[z] = _L[0]
+    _L[0] = set(0x40, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbset6inhl(z):
-    mem[z] = set(0x40, mem[z])
+    memory.pokeb(z, set(0x40, memory.peekb(z)))
     return 23
 
 
 def cbset6a(z):
-    _A[0] = set(0x40, mem[z])
-    mem[z] = _A[0]
+    _A[0] = set(0x40, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 
 # SET 7, *
 def cbset7b(z):
-    _B[0] = set(0x80, mem[z])
-    mem[z] = _B[0]
+    _B[0] = set(0x80, memory.peekb(z))
+    memory.pokeb(z, _B[0])
     return 23
 
 
 def cbset7c(z):
-    _C[0] = set(0x80, mem[z])
-    mem[z] = _C[0]
+    _C[0] = set(0x80, memory.peekb(z))
+    memory.pokeb(z, _C[0])
     return 23
 
 
 def cbset7d(z):
-    _D[0] = set(0x80, mem[z])
-    mem[z] = _D[0]
+    _D[0] = set(0x80, memory.peekb(z))
+    memory.pokeb(z, _D[0])
     return 23
 
 
 def cbset7e(z):
-    _E[0] = set(0x80, mem[z])
-    mem[z] = _E[0]
+    _E[0] = set(0x80, memory.peekb(z))
+    memory.pokeb(z, _E[0])
     return 23
 
 
 def cbset7h(z):
-    _H[0] = set(0x80, mem[z])
-    mem[z] = _H[0]
+    _H[0] = set(0x80, memory.peekb(z))
+    memory.pokeb(z, _H[0])
     return 23
 
 
 def cbset7l(z):
-    _L[0] = set(0x80, mem[z])
-    mem[z] = _L[0]
+    _L[0] = set(0x80, memory.peekb(z))
+    memory.pokeb(z, _L[0])
     return 23
 
 
 def cbset7inhl(z):
-    mem[z] = set(0x80, mem[z])
+    memory.pokeb(z, set(0x80, memory.peekb(z)))
     return 23
 
 
 def cbset7a(z):
-    _A[0] = set(0x80, mem[z])
-    mem[z] = _A[0]
+    _A[0] = set(0x80, memory.peekb(z))
+    memory.pokeb(z, _A[0])
     return 23
 
 

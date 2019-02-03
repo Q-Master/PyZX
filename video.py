@@ -61,7 +61,7 @@ def update():
 
 
 def fill_screen_map():
-    zx_screen = Z80.mem[16384:16384+6912]
+    zx_screen = Z80.memory.mem[16384:16384+6912]
     byte_number = 0
     buffer = screen.get_buffer()
     for coord_y in range(192):
