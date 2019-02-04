@@ -223,6 +223,6 @@ def load_sna(name):
     else:
         Z80._IM = Z80.IM2
     Z80.setflags()
-    Z80.outb(254, (border % 8))  # border
+    Z80.ports.port_out(254, (border % 8))  # border
     Z80.memory.mem[16384:] = msnafile[27:]
     Z80.poppc()

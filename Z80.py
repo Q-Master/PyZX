@@ -1,6 +1,7 @@
 import struct
 import video
 import memory
+import ports
 
 show_debug_info = False
 tstatesPerInterrupt = 0
@@ -264,45 +265,6 @@ def show_registers():
         print(f'IFF1 {_IFF1}, IFF2 {_IFF2}')
 
 
-# IO ports
-def outb(port, bite):
-    # print "outb(PORT:%d, VAL:%d)" % (port, bite)
-    pass
-
-
-def inb2(port):
-    # print "inb(PORT:%d)" % port
-    # print 'inb'
-    return 0xff
-
-
-# Keyboard-------------------------------------------
-import keyboard
-
-
-def inb(port):
-    res = 0xff
-    k = keyboard.keyboard
-    if (port & 0x0001) == 0:
-        if (port & 0x8000) == 0:
-            res &= k[0]  # _B_SPC
-        if (port & 0x4000) == 0:
-            res &= k[1]  # _H_ENT
-        if (port & 0x2000) == 0:
-            res &= k[2]  # _Y_P
-        if (port & 0x1000) == 0:
-            res &= k[3]  # _6_0
-        if (port & 0x0800) == 0:
-            res &= k[4]  # _1_5
-        if (port & 0x0400) == 0:
-            res &= k[5]  # _Q_T
-        if (port & 0x0200) == 0:
-            res &= k[6]  # _A_G
-        if (port & 0x0100) == 0:
-            res &= k[7]  # _CAPS_V
-    return res
-
-
 # Interrupt handlers
 # def interruptTriggered( tstates ):
 #		return (tstates >= 0);
@@ -316,7 +278,7 @@ def interrupt():
     Hz = 25
 
     video_update_time += 1
-    keyboard.do_keys()
+    ports.keyboard.do_keys()
     if not (video_update_time % int(50 / Hz)):
         video.update()
     return interruptCPU()
@@ -3042,12 +3004,12 @@ def cb():
 
 
 def outna():
-    outb(nxtpcb(), _A[0])
+    ports.port_out(nxtpcb(), _A[0])
     return 11
 
 
 def inan():
-    _A[0] = inb(_A[0] << 8 | nxtpcb())
+    _A[0] = ports.port_in(_A[0] << 8 | nxtpcb())
     return 11
 
 
@@ -3355,42 +3317,42 @@ def inafrombc():
 
 # OUT (c),r
 def outtocb():
-    outb(_BC[0], _B[0])
+    ports.port_out(_BC[0], _B[0])
     return 12
 
 
 def outtocc():
-    outb(_BC[0], _C[0])
+    ports.port_out(_BC[0], _C[0])
     return 12
 
 
 def outtocd():
-    outb(_BC[0], _D[0])
+    ports.port_out(_BC[0], _D[0])
     return 12
 
 
 def outtoce():
-    outb(_BC[0], _E[0])
+    ports.port_out(_BC[0], _E[0])
     return 12
 
 
 def outtoch():
-    outb(_BC[0], _H[0])
+    ports.port_out(_BC[0], _H[0])
     return 12
 
 
 def outtocl():
-    outb(_BC[0], _L[0])
+    ports.port_out(_BC[0], _L[0])
     return 12
 
 
 def outtoc0():
-    outb(_BC[0], 0)
+    ports.port_out(_BC[0], 0)
     return 12
 
 
 def outtoca():
-    outb(_BC[0], _A[0])
+    ports.port_out(_BC[0], _A[0])
     return 12
 
 
@@ -3626,7 +3588,7 @@ def cpi():
 def ini():
     global _fPV, _fN, _fC, _fZ
     c = _fC
-    memory.pokeb(_HL[0], inb(_BC[0]))
+    memory.pokeb(_HL[0], ports.port_in(_BC[0]))
     _HL[0] = inc16(_HL[0])
     _B[0] = qdec8(_B[0])
     _fC = c
@@ -3638,7 +3600,7 @@ def ini():
 def outi():
     global _fPV, _fN, _fC
     c = _fC
-    outb(_BC[0], memory.peekb(_HL[0]))
+    ports.port_out(_BC[0], memory.peekb(_HL[0]))
     _HL[0] = inc16(_HL[0])
     _B[0] = qdec8(_B[0])
     _fC = c
@@ -3674,7 +3636,7 @@ def cpd():
 
 def ind():
     global _fZ, _fN
-    memory.pokeb(_HL[0], inb(_BC[0]))
+    memory.pokeb(_HL[0], ports.port_in(_BC[0]))
     _HL[0] = dec16(_HL[0])
     _B[0] = qdec8(_B[0])
     _fN = True
@@ -3684,7 +3646,7 @@ def ind():
 
 def outd():
     global _fZ, _fN
-    outb(_BC[0], memory.peekb(_HL[0]))
+    ports.port_out(_BC[0], memory.peekb(_HL[0]))
     _HL[0] = dec16(_HL[0])
     _B[0] = qdec8(_B[0])
     _fN = True
@@ -3734,7 +3696,7 @@ def cpir():
 def inir():
     global _fN, _fC, _fZ, _R7_b, local_tstates
     while True:
-        memory.pokeb(_HL, inb(_BC[0]))
+        memory.pokeb(_HL, ports.port_in(_BC[0]))
         _HL[0] = (_HL[0] + 1) % 65536
         _B[0] = (_B[0] - 1) % 256
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
@@ -3750,7 +3712,7 @@ def inir():
 def otir():
     global _fN, _fZ, _R7_b, local_tstates
     while True:
-        outb(_BC[0], memory.peekb(_HL[0]))
+        ports.port_out(_BC[0], memory.peekb(_HL[0]))
         _HL[0] = (_HL[0] + 1) % 65536
         _B[0] = (_B[0] - 1) % 256
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
@@ -3805,7 +3767,7 @@ def cpdr():
 def indr():
     global _fN, _fC, _fZ, _R7_b, local_tstates
     while True:
-        memory.pokeb(_HL, inb(_BC[0]))
+        memory.pokeb(_HL, ports.port_in(_BC[0]))
         _HL[0] = (_HL[0] - 1) % 65536
         _B[0] = (_B[0] - 1) % 256
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
@@ -3821,7 +3783,7 @@ def indr():
 def otdr():
     global _fN, _fZ, _R7_b, local_tstates
     while True:
-        outb(_BC[0], memory.peekb(_HL[0]))
+        ports.port_out(_BC[0], memory.peekb(_HL[0]))
         _HL[0] = (_HL[0] - 1) % 65536
         _B[0] = (_B[0] - 1) % 256
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
@@ -5607,7 +5569,7 @@ _idcbdict = {
 
 def in_bc():
     global _fS, _f3, _f5, _fZ, _fPV, _fH, _fN
-    ans = inb(_BC[0])
+    ans = ports.port_in(_BC[0])
     _fZ = ans == 0
     _fS = ans > 0x7f
     _f3 = (ans & F_3) != 0

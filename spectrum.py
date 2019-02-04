@@ -36,7 +36,7 @@ Z80.Z80(3.5)  # MhZ
 
 load_rom(romfile)
 Z80.reset()
-Z80.outb(254, 0xff)  # white border on startup
+Z80.ports.port_out(254, 0xff)  # white border on startup
 
 sys.setswitchinterval(255)  # we don't use threads, kind of speed up
 
