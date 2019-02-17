@@ -1,26 +1,12 @@
 # -*- coding: utf-8 -*-
 import keyboard
 
+beep_lev = False
 
 def xInFE(port: int) -> int:
-    res = 0xff
-    k = keyboard.keyboard
-    if (port & 0x8000) == 0:
-        res &= k[0]  # _B_SPC
-    if (port & 0x4000) == 0:
-        res &= k[1]  # _H_ENT
-    if (port & 0x2000) == 0:
-        res &= k[2]  # _Y_P
-    if (port & 0x1000) == 0:
-        res &= k[3]  # _6_0
-    if (port & 0x0800) == 0:
-        res &= k[4]  # _1_5
-    if (port & 0x0400) == 0:
-        res &= k[5]  # _Q_T
-    if (port & 0x0200) == 0:
-        res &= k[6]  # _A_G
-    if (port & 0x0100) == 0:
-        res &= k[7]  # _CAPS_V
+    res = read_keyboard(port)
+    res |= read_tape()
+    res |= read_beep()
     return res
 
 
@@ -72,6 +58,10 @@ portmap = [
 ]
 
 
+def sync_ports(ticks_spent: int):
+    pass
+
+
 def port_in(portnum: int) -> int:
     for mask, value, _, _, _, fin, _ in portmap:
         if portnum & mask == value & mask:
@@ -85,3 +75,37 @@ def port_out(portnum: int, value: int):
             if fout:
                 fout(portnum, value)
             break
+
+
+def read_keyboard(port: int) -> int:
+    res = 0xff
+    k = keyboard.keyboard
+    if (port & 0x8000) == 0:
+        res &= k[0]  # _B_SPC
+    if (port & 0x4000) == 0:
+        res &= k[1]  # _H_ENT
+    if (port & 0x2000) == 0:
+        res &= k[2]  # _Y_P
+    if (port & 0x1000) == 0:
+        res &= k[3]  # _6_0
+    if (port & 0x0800) == 0:
+        res &= k[4]  # _1_5
+    if (port & 0x0400) == 0:
+        res &= k[5]  # _Q_T
+    if (port & 0x0200) == 0:
+        res &= k[6]  # _A_G
+    if (port & 0x0100) == 0:
+        res &= k[7]  # _CAPS_V
+    return res
+
+
+def read_beep() -> int:
+    global beep_lev
+    return 0x40 if beep_lev else 0x0
+
+
+def read_tape() -> int:
+    '''
+    ((comp->tape->volPlay & 0x80) ? 0x40 : 0x00);
+    '''
+    return 0x00

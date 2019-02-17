@@ -5,11 +5,20 @@ import ports
 
 show_debug_info = False
 tstatesPerInterrupt = 0
+nsPerTick = 0
 
 def Z80(clockFrequencyInMHz):
-    global tstatesPerInterrupt
+    '''
+    int perNoTurbo = 1e3 / comp->cpuFrq;		// ns for full cpu tick
+	if (perNoTurbo & 1) perNoTurbo++;
+    comp->nsPerTick = perNoTurbo / comp->frqMul;
+    '''
+    global tstatesPerInterrupt, nsPerTick
     # 50Hz for main interrupt signal
     tstatesPerInterrupt = int((clockFrequencyInMHz * 1e6) / 50)
+    nsPerTick = int(1e3/clockFrequencyInMHz)
+    if nsPerTick & 1:
+        nsPerTick += 1
 
 
 IM0 = 0
@@ -314,8 +323,10 @@ def interruptCPU():
 
 # Z80 fetch/execute loop
 local_tstates = -tstatesPerInterrupt  # -70000
-def check_tstates():
-    global local_tstates
+def check_tstates(diff_tstates):
+    global local_tstates, nsPerTick
+    local_tstates += diff_tstates
+    ports.sync_ports(diff_tstates * nsPerTick)
     if local_tstates >= 0:
         #print(f'LTS: {local_tstates} _PC: {_PC[0]:4x}')
         local_tstates -= tstatesPerInterrupt - interrupt()
@@ -325,17 +336,16 @@ def execute():
     global _R, main_cmds, local_tstates
 
     while True:
-        check_tstates()
         inc_r()
         show_registers()
         opcode = nxtpcb()
         if opcode == 118:  # HALT
             haltsToInterrupt = int(((-local_tstates - 1) / 4) + 1)
-            local_tstates += (haltsToInterrupt * 4)
+            check_tstates(haltsToInterrupt * 4)
             inc_r(haltsToInterrupt - 1)
             continue
         else:
-            local_tstates += main_cmds.get(opcode)()
+            check_tstates(main_cmds.get(opcode)())
 
 
 def execute_id():
@@ -3656,7 +3666,7 @@ def outd():
 
 # xxIR
 def ldir():
-    global _fPV, _R7_b, local_tstates, _fN, _fH
+    global _fPV, _R7_b, _fN, _fH
     _fPV = True
     while True:
         memory.pokeb(_DE[0], memory.peekb(_HL[0]))
@@ -3666,8 +3676,7 @@ def ldir():
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
         if _BC[0] == 0:
             break
-        local_tstates += 21
-        check_tstates()
+        check_tstates(21)
     _fPV = False
     _fN = False
     _fH = False
@@ -3675,7 +3684,7 @@ def ldir():
 
 
 def cpir():
-    global _fPV, _fN, _fC, _fZ, _R7_b, local_tstates
+    global _fPV, _fN, _fC, _fZ, _R7_b
     c = _fC
     _fPV = True
     while True:
@@ -3685,8 +3694,7 @@ def cpir():
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
         if _BC[0] == 0 or _fZ:
             break
-        local_tstates += 21
-        check_tstates()
+        check_tstates(21)
     _fC = c
     _fN = True
     _fPV = _BC[0] != 0
@@ -3694,7 +3702,7 @@ def cpir():
 
 
 def inir():
-    global _fN, _fC, _fZ, _R7_b, local_tstates
+    global _fN, _fC, _fZ, _R7_b
     while True:
         memory.pokeb(_HL, ports.port_in(_BC[0]))
         _HL[0] = (_HL[0] + 1) % 65536
@@ -3702,15 +3710,14 @@ def inir():
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
         if _B[0] == 0:
             break
-        local_tstates += 21
-        check_tstates()
+        check_tstates(21)
     _fZ = True
     _fC = False
     _fN = False
     return 16
 
 def otir():
-    global _fN, _fZ, _R7_b, local_tstates
+    global _fN, _fZ, _R7_b
     while True:
         ports.port_out(_BC[0], memory.peekb(_HL[0]))
         _HL[0] = (_HL[0] + 1) % 65536
@@ -3718,8 +3725,7 @@ def otir():
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
         if _B[0] == 0:
             break
-        local_tstates += 21
-        check_tstates()
+        check_tstates(21)
     _fZ = True
     _fN = False
     return 16
@@ -3727,7 +3733,7 @@ def otir():
 
 # xxDR
 def lddr():
-    global _fPV, _R7_b, local_tstates, _fH, _fN
+    global _fPV, _R7_b, _fH, _fN
     _fPV = True
     while True:
         memory.pokeb(_DE[0], memory.peekb(_HL[0]))
@@ -3737,8 +3743,7 @@ def lddr():
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
         if _BC[0] == 0:
             break
-        local_tstates += 21
-        check_tstates()
+        check_tstates(21)
     _fPV = False
     _fH = False
     _fN = False
@@ -3746,7 +3751,7 @@ def lddr():
 
 
 def cpdr():
-    global _fPV, _fN, _fC, _fZ, _R7_b, local_tstates
+    global _fPV, _fN, _fC, _fZ, _R7_b
     c = _fC
     _fPV = True
     while True:
@@ -3756,8 +3761,7 @@ def cpdr():
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
         if _BC[0] == 0 or _fZ:
             break
-        local_tstates += 21
-        check_tstates()
+        check_tstates(21)
     _fC = c
     _fN = True
     _fPV = _BC[0] != 0
@@ -3765,7 +3769,7 @@ def cpdr():
 
 
 def indr():
-    global _fN, _fC, _fZ, _R7_b, local_tstates
+    global _fN, _fC, _fZ, _R7_b
     while True:
         memory.pokeb(_HL, ports.port_in(_BC[0]))
         _HL[0] = (_HL[0] - 1) % 65536
@@ -3773,15 +3777,14 @@ def indr():
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
         if _B[0] == 0:
             break
-        local_tstates += 21
-        check_tstates()
+        check_tstates(21)
     _fZ = True
     _fC = False
     _fN = False
     return 16
 
 def otdr():
-    global _fN, _fZ, _R7_b, local_tstates
+    global _fN, _fZ, _R7_b
     while True:
         ports.port_out(_BC[0], memory.peekb(_HL[0]))
         _HL[0] = (_HL[0] - 1) % 65536
@@ -3789,8 +3792,7 @@ def otdr():
         _R_b[0] = (_R_b[0] + 2) % 128 + _R7_b
         if _B[0] == 0:
             break
-        local_tstates += 21
-        check_tstates()
+        check_tstates(21)
     _fZ = True
     _fN = False
     return 16
