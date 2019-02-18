@@ -10,7 +10,6 @@
 # Full z80 core rewrite + optimizations + improvements Q-Master 2019
 
 import sys
-
 import Z80
 import video
 import load
