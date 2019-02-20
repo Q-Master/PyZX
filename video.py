@@ -32,34 +32,38 @@ COLORS = [
 ]
 
 # Инициализация таблицы адресов пиксельных и аттрибутных линий
+addr_pix = [(((line // 64) * 2048) + ((line % 8) * 256) + ((line & 56) * 4)) for line in range(192)]
 addr_attr = [(6144 + ((line // 8) * 32)) for line in range(192)]
 zxrowmap = [((coord_y & 0b111) << 3) + ((coord_y & 0b111000) >> 3) + (coord_y & 0b11000000) for coord_y in range(192)]
 colormap = [((attr % 8) + (8 if attr & 64 else 0), (attr & 0b1111000) >> 3) for attr in range(256)]
 
 
-pixelmap = []
+pixelmap = bytearray(256*256*8)
+pixelmap_m = memoryview(pixelmap)
+STRIDE = 256*8
 def init_pixelmap():
     for i in range(256):
         color_ink, color_paper = colormap[i]
-        pixellist = []
+        pixellist = pixelmap_m[i*STRIDE : i*STRIDE+STRIDE]
         for pix in range(256):
-            pixels = bytearray(8)
+            pixels = pixellist[pix*8 : pix*8+8]
             for bit in range(8):
                 pixels[7-bit] = color_ink if (pix & (1 << bit)) else color_paper
-            pixellist.append(bytes(pixels))
-        pixelmap.append(pixellist)
 
 
 zx_screen = None
+zx_screen_with_border = None
 screen = None
 ratio = 2
 def init():
-    global screen, zx_screen
+    global screen, zx_screen, zx_screen_with_border
     init_pixelmap()
     pygame.init()
     icon = pygame.image.load('icon.png')
-    zx_screen = pygame.surface.Surface((FULL_SCREEN_WIDTH, FULL_SCREEN_HEIGHT), pygame.HWSURFACE, 8)
+    zx_screen = pygame.surface.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.HWSURFACE, 8)
     zx_screen.set_palette(COLORS)
+    zx_screen_with_border = pygame.surface.Surface((FULL_SCREEN_WIDTH, FULL_SCREEN_HEIGHT), pygame.HWSURFACE, 8)
+    zx_screen_with_border.set_palette(COLORS)
     screen = pygame.display.set_mode((FULL_SCREEN_WIDTH*ratio, FULL_SCREEN_HEIGHT*ratio), pygame.HWSURFACE | pygame.DOUBLEBUF, 8)
     pygame.display.set_palette(COLORS)
     pygame.display.set_caption(CAPTION)
@@ -76,21 +80,24 @@ def update():
         clock.tick()
         pygame.display.set_caption(f'{CAPTION} - {clock.get_fps():.2f} FPS')
     if Z80.ports.current_border != old_border:
-        zx_screen.fill(Z80.ports.current_border)
+        zx_screen_with_border.fill(Z80.ports.current_border)
         old_border = Z80.ports.current_border
     fill_screen_map()
-    pygame.transform.scale(zx_screen, (FULL_SCREEN_WIDTH*ratio, FULL_SCREEN_HEIGHT*ratio), screen)
+    zx_screen_with_border.blit(zx_screen, (64, 32))
+    pygame.transform.scale(zx_screen_with_border, (FULL_SCREEN_WIDTH*ratio, FULL_SCREEN_HEIGHT*ratio), screen)
     pygame.display.flip()
 
-
+buffer = bytearray(SCREEN_WIDTH*SCREEN_HEIGHT)
+buffer_m = memoryview(buffer)
 def fill_screen_map():
     zx_videoram = Z80.memory.mem[16384:16384+6912]
-    byte_number = 0
-    buffer = zx_screen.get_buffer()
+    offs = 0
     for coord_y in range(SCREEN_HEIGHT):
-        zx_row = zxrowmap[coord_y]
-        attr_addr = addr_attr[zx_row]
-        pos = (zx_row+32) * FULL_SCREEN_WIDTH
+        pix_addr = addr_pix[coord_y]
+        attr_addr = addr_attr[coord_y]
         for i in range(0, 32):
-            buffer.write(pixelmap[zx_videoram[attr_addr+i]][zx_videoram[byte_number]], pos+i*8+64)
-            byte_number += 1
+            poffs = zx_videoram[attr_addr+i]*STRIDE+zx_videoram[pix_addr+i]*8
+            buffer_m[offs : offs+8] = pixelmap_m[poffs : poffs+8]
+            offs += 8
+    buf = zx_screen.get_buffer()
+    buf.write(buffer_m.tobytes())
