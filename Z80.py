@@ -3558,6 +3558,7 @@ def rlda():
     _fH = False
     _fN = False
     _A[0] = ans
+    return 18
 
 
 # xxI
