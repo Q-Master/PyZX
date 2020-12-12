@@ -2787,7 +2787,7 @@ def set3l():
 
 
 def set3fromhl():
-    memory.peekb(_HL[0], set(0x08, memory.peekb(_HL[0])))
+    memory.pokeb(_HL[0], set(0x08, memory.peekb(_HL[0])))
     return 15
 
 
