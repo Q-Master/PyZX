@@ -144,7 +144,7 @@ _PC = memoryview(_PC_b).cast('H')
 _I_b = bytearray(2)
 _IH_IL = memoryview(_I_b)
 _I = _IH_IL[1:2]
-_Ifull = _IH_IL.cast('H')
+#_Ifull = _IH_IL.cast('H')
 
 
 # Memory refresh register
@@ -251,7 +251,7 @@ def reset():
     _IX[0] = 0
     _IY[0] = 0
     _R = 0
-    _Ifull[0] = 0
+    #_Ifull[0] = 0
     _IFF1 = 0
     _IFF2 = 0
     _IM = IM0
@@ -300,7 +300,8 @@ def interruptCPU():
         pushpc()
         _IFF1 = False
         _IFF2 = False
-        _PC[0] = memory.peekw(_Ifull[0])
+        #_PC[0] = memory.peekw(_Ifull[0])
+        _PC[0] = memory.peekw(_I[0]*256+255)
         return 19
 
     if not _IFF1:
@@ -5701,7 +5702,7 @@ def dec8(ans):
 # Add with carry - (NOT CHECKED)
 def adc16(a, b):
     global _fS, _f3, _f5, _fN, _fZ, _fC, _fH, _fPV
-    print(f'_fC = {_fC}, a = 0x{a:4x}, b = 0x{b:4x}')
+    #print(f'_fC = {_fC}, a = 0x{a:4x}, b = 0x{b:4x}')
     c = 1 if _fC else 0
     ans = (a + b + c) % 65536
     _fS = ans > 0x7fff
