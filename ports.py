@@ -30,23 +30,23 @@ def xOutFE(port: int, value: int):
 
 
 def xInFFFD(port: int) -> int:
-    pass
+    return 0xff
 
 
 def xOutFFFD(port: int, value: int):
-    pass
+    return 0xff
 
 
 def xOutBFFD(port: int, value: int):
-    pass
+    return 0xff
 
 
 def xInFADF(port: int) -> int:
-    pass
+    return 0xff
 
 
 def xInFBDF(port: int) -> int:
-    pass
+    return 0xff
 
 
 def xInFFDF(port: int) -> int:
@@ -75,6 +75,7 @@ PORTMAP = [
 current_border = 0
 
 def port_in(portnum: int) -> int:
+    #print('port: ', portnum, type(portnum))
     for mask, value, _, _, _, fin, _ in PORTMAP:
         if portnum & mask == value & mask:
             return fin(portnum) if fin else 0xff

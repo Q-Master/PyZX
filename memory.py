@@ -15,6 +15,7 @@ signedbyte = struct.Struct('<b')
 
 def pokew(addr: int, word):
     global mem
+
     if addr % 0x4000 == 0x3fff:
         if mem_rw[addr//0x4000]:
             mem[addr] = word % 256
@@ -28,15 +29,20 @@ def pokew(addr: int, word):
 
 def peekw(addr: int) -> int:
     global mem
+
     if addr == 65535:
         return (mem[65535] | (mem[0] << 8)) % 65536
-    else:
-        return wstruct.unpack_from(mem, addr)[0]
+
+    return wstruct.unpack_from(mem, addr)[0]
 
 
 def pokeb(addr: int, byte):
-    if mem_rw[addr//0x4000]:
-        mem[addr] = byte
+    try:
+        if mem_rw[addr//0x4000]:
+            mem[addr] = byte
+    except Exception as error:
+        print(addr, byte, type(addr), type(byte))
+        raise error
 
 
 def peekb(addr: int) -> int:
@@ -45,3 +51,7 @@ def peekb(addr: int) -> int:
 
 def peeksb(addr: int) -> int:
     return signedbyte.unpack_from(mem, addr)[0]
+
+if __name__ == '__main__':
+    pokeb(100000, 111)
+    print('DONE')
