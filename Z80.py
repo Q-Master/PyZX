@@ -144,7 +144,7 @@ _PC = memoryview(_PC_b).cast('H')
 _I_b = bytearray(2)
 _IH_IL = memoryview(_I_b)
 _I = _IH_IL[1:2]
-_Ifull = _IH_IL.cast('H')
+#_Ifull = _IH_IL.cast('H')
 
 
 # Memory refresh register
@@ -251,7 +251,7 @@ def reset():
     _IX[0] = 0
     _IY[0] = 0
     _R = 0
-    _Ifull[0] = 0
+    #_Ifull[0] = 0
     _IFF1 = 0
     _IFF2 = 0
     _IM = IM0
@@ -300,7 +300,8 @@ def interruptCPU():
         pushpc()
         _IFF1 = False
         _IFF2 = False
-        _PC[0] = memory.peekw(_Ifull[0])
+        #_PC[0] = memory.peekw(_Ifull[0])
+        _PC[0] = memory.peekw(_I[0]*256+255)
         return 19
 
     if not _IFF1:
@@ -2787,7 +2788,7 @@ def set3l():
 
 
 def set3fromhl():
-    memory.peekb(_HL[0], set(0x08, memory.peekb(_HL[0])))
+    memory.pokeb(_HL[0], set(0x08, memory.peekb(_HL[0])))
     return 15
 
 
@@ -2969,6 +2970,7 @@ _cbdict = {
     40: srab, 41: srac, 42: srad, 43: srae, 44: srah, 45: sral, 46: srafromhl, 47: sra_a,
     48: slsb, 49: slsc, 50: slsd, 51: slse, 52: slsh, 53: slsl, 54: slsfromhl, 55: sls_a,
     56: srlb, 57: srlc, 58: srld, 59: srle, 60: srlh, 61: srll, 62: srlfromhl, 63: srl_a,
+
     64: bit0b, 65: bit0c, 66: bit0d, 67: bit0e, 68: bit0h, 69: bit0l, 70: bit0fromhl, 71: bit0a,
     72: bit1b, 73: bit1c, 74: bit1d, 75: bit1e, 76: bit1h, 77: bit1l, 78: bit1fromhl, 79: bit1a,
     80: bit2b, 81: bit2c, 82: bit2d, 83: bit2e, 84: bit2h, 85: bit2l, 86: bit2fromhl, 87: bit2a,
@@ -2977,6 +2979,7 @@ _cbdict = {
     104: bit5b, 105: bit5c, 106: bit5d, 107: bit5e, 108: bit5h, 109: bit5l, 110: bit5fromhl, 111: bit5a,
     112: bit6b, 113: bit6c, 114: bit6d, 115: bit6e, 116: bit6h, 117: bit6l, 118: bit6fromhl, 119: bit6a,
     120: bit7b, 121: bit7c, 122: bit7d, 123: bit7e, 124: bit7h, 125: bit7l, 126: bit7fromhl, 127: bit7a,
+
     128: res0b, 129: res0c, 130: res0d, 131: res0e, 132: res0h, 133: res0l, 134: res0fromhl, 135: res0a,
     136: res1b, 137: res1c, 138: res1d, 139: res1e, 140: res1h, 141: res1l, 142: res1fromhl, 143: res1a,
     144: res2b, 145: res2c, 146: res2d, 147: res2e, 148: res2h, 149: res2l, 150: res2fromhl, 151: res2a,
@@ -2985,14 +2988,15 @@ _cbdict = {
     168: res5b, 169: res5c, 170: res5d, 171: res5e, 172: res5h, 173: res5l, 174: res5fromhl, 175: res5a,
     176: res6b, 177: res6c, 178: res6d, 179: res6e, 180: res6h, 181: res6l, 182: res6fromhl, 183: res6a,
     184: res7b, 185: res7c, 186: res7d, 187: res7e, 188: res7h, 189: res7l, 190: res7fromhl, 191: res7a,
-    192: res0b, 193: res0c, 194: res0d, 195: res0e, 196: res0h, 197: res0l, 198: res0fromhl, 199: res0a,
-    200: res1b, 201: res1c, 202: res1d, 203: res1e, 204: res1h, 205: res1l, 206: res1fromhl, 207: res1a,
-    208: res2b, 209: res2c, 210: res2d, 211: res2e, 212: res2h, 213: res2l, 214: res2fromhl, 215: res2a,
-    216: res3b, 217: res3c, 218: res3d, 219: res3e, 220: res3h, 221: res3l, 222: res3fromhl, 223: res3a,
-    224: res4b, 225: res4c, 226: res4d, 227: res4e, 228: res4h, 229: res4l, 230: res4fromhl, 231: res4a,
-    232: res5b, 233: res5c, 234: res5d, 235: res5e, 236: res5h, 237: res5l, 238: res5fromhl, 239: res5a,
-    240: res6b, 241: res6c, 242: res6d, 243: res6e, 244: res6h, 245: res6l, 246: res6fromhl, 247: res6a,
-    248: res7b, 249: res7c, 250: res7d, 251: res7e, 252: res7h, 253: res7l, 254: res7fromhl, 255: res7a
+
+    192: set0b, 193: set0c, 194: set0d, 195: set0e, 196: set0h, 197: set0l, 198: set0fromhl, 199: set0a,
+    200: set1b, 201: set1c, 202: set1d, 203: set1e, 204: set1h, 205: set1l, 206: set1fromhl, 207: set1a,
+    208: set2b, 209: set2c, 210: set2d, 211: set2e, 212: set2h, 213: set2l, 214: set2fromhl, 215: set2a,
+    216: set3b, 217: set3c, 218: set3d, 219: set3e, 220: set3h, 221: set3l, 222: set3fromhl, 223: set3a,
+    224: set4b, 225: set4c, 226: set4d, 227: set4e, 228: set4h, 229: set4l, 230: set4fromhl, 231: set4a,
+    232: set5b, 233: set5c, 234: set5d, 235: set5e, 236: set5h, 237: set5l, 238: set5fromhl, 239: set5a,
+    240: set6b, 241: set6c, 242: set6d, 243: set6e, 244: set6h, 245: set6l, 246: set6fromhl, 247: set6a,
+    248: set7b, 249: set7c, 250: set7d, 251: set7e, 252: set7h, 253: set7l, 254: set7fromhl, 255: set7a
 }
 
 
@@ -3558,6 +3562,7 @@ def rlda():
     _fH = False
     _fN = False
     _A[0] = ans
+    return 18
 
 
 # xxI
@@ -5697,7 +5702,7 @@ def dec8(ans):
 # Add with carry - (NOT CHECKED)
 def adc16(a, b):
     global _fS, _f3, _f5, _fN, _fZ, _fC, _fH, _fPV
-    print(f'_fC = {_fC}, a = 0x{a:4x}, b = 0x{b:4x}')
+    #print(f'_fC = {_fC}, a = 0x{a:4x}, b = 0x{b:4x}')
     c = 1 if _fC else 0
     ans = (a + b + c) % 65536
     _fS = ans > 0x7fff

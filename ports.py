@@ -30,51 +30,52 @@ def xOutFE(port: int, value: int):
 
 
 def xInFFFD(port: int) -> int:
-    pass
+    return 0xff
 
 
 def xOutFFFD(port: int, value: int):
-    pass
+    return 0xff
 
 
 def xOutBFFD(port: int, value: int):
-    pass
+    return 0xff
 
 
 def xInFADF(port: int) -> int:
-    pass
+    return 0xff
 
 
 def xInFBDF(port: int) -> int:
-    pass
+    return 0xff
 
 
 def xInFFDF(port: int) -> int:
-    pass
+    return 0xff
 
 
 def spIn1F(port: int) -> int:
-    pass
+    return keyboard.joy[0]
 
 
 def spInFF(port: int) -> int:
     return 0xff
 
 PORTMAP = [
-    (0x0001, 0x00fe, 2, 2, 2, xInFE, xOutFE),
-    (0xc002, 0xfffd, 2, 2, 2, xInFFFD, xOutFFFD),
-    (0xc002, 0xbffd, 2, 2, 2, None, xOutBFFD),
-    (0x0320, 0xfadf, 2, 2, 2, xInFADF, None),
-    (0x0720, 0xfbdf, 2, 2, 2, xInFBDF, None),
-    (0x0720, 0xffdf, 2, 2, 2, xInFFDF, None),
-    (0x0021, 0x001f, 0, 2, 2, spIn1F, None),
-    (0x0000, 0x0000, 0, 2, 2, spInFF, None),  # all unknown ports is FF (nodos)
+    (0x0001, 0x00fe, 2, 2, 2, xInFE, xOutFE),       # keyboard
+    #(0xc002, 0xfffd, 2, 2, 2, xInFFFD, xOutFFFD),
+    #(0xc002, 0xbffd, 2, 2, 2, None, xOutBFFD),      # AYdataW
+    #(0x0320, 0xfadf, 2, 2, 2, xInFADF, None),       # K-MOUSEturboB
+    #(0x0720, 0xfbdf, 2, 2, 2, xInFBDF, None),       # K-MOUSE_X
+    #(0x0720, 0xffdf, 2, 2, 2, xInFFDF, None),      # K-MOUSE_Y
+    (0x0021, 0x001f, 0, 2, 2, spIn1F, None),        # kempstom joystick
+    (0x0000, 0x0000, 0, 2, 2, spInFF, None),        # all unknown ports is FF (nodos)
     (0x0000, 0x0000, 2, 2, 2, spInFF, None)
 ]
 
 current_border = 0
 
 def port_in(portnum: int) -> int:
+    #print('port: ', portnum, type(portnum))
     for mask, value, _, _, _, fin, _ in PORTMAP:
         if portnum & mask == value & mask:
             return fin(portnum) if fin else 0xff

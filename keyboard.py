@@ -8,6 +8,7 @@ b1 = 0x02
 b0 = 0x01
 
 keyboard = [0xff] * 8
+joy = [0]
 
 _B_SPC = 0
 _H_ENT = 1
@@ -30,6 +31,7 @@ def reset_keyboard():
     keyboard[_A_G] = 0xff
     keyboard[_CAPS_V] = 0xff
 
+    joy = [0]
 
 signals = {
     K_1: [_1_5, b0],
@@ -123,8 +125,34 @@ def do_key(down, scan_code, mods):
         caps = shift
         scan_code = K_8
 
-    try:
+    # numpad as a kempston
+    if scan_code == K_KP8:  # up
+        if down:
+            joy[0] |= 0b00001000
+        else:
+            joy[0] &= 0b11110111
+    elif scan_code == K_KP2:  # down
+        if down:
+            joy[0] |= 0b00000100
+        else:
+            joy[0] &= 0b11111011
+    elif scan_code == K_KP4:  # left
+        if down:
+            joy[0] |= 0b00000010
+        else:
+            joy[0] &= 0b11111101
+    elif scan_code == K_KP6:  # right
+        if down:
+            joy[0] |= 0b00000001
+        else:
+            joy[0] &= 0b11111110
+    elif scan_code == K_KP0:  # fire
+        if down:
+            joy[0] |= 0b00010000
+        else:
+            joy[0] &= 0b11101111
 
+    try:
         sig = signals[scan_code]
 
         if down:
